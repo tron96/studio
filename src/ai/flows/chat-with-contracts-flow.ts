@@ -41,7 +41,7 @@ export async function chatWithContracts(input: ChatWithContractsInput): Promise<
 const prompt = ai.definePrompt({
   name: 'chatWithContractsPrompt',
   model: 'huggingface/meta-llama/Llama-3.2-1B-Instruct', // Use the Llama model
-  input: {schema: ChatWithContractsInputSchema},
+  input: {schema: ChatWithContractsInputSchema}, // The schema for the raw input to the flow
   output: {schema: ChatWithContractsOutputSchema},
   // Removed Gemini-specific safetySettings
   prompt: `You are a helpful AI assistant specializing in contract analysis.
@@ -53,7 +53,7 @@ Here are the contracts:
 {{#each contracts}}
 Contract Filename: {{this.fileName}}
 Contract Content (this is a PDF document, interpret its content):
-{{#if (eq (substring (substring contentDataUri 5) 0 (indexOf (substring contentDataUri 5) ';')) 'application/pdf')}}
+{{#if this.isPdf}}
 {{media url=this.contentDataUri}}
 {{else}}
 [Content of {{this.fileName}} is not a PDF and cannot be directly displayed in this prompt for PDF-focused models. Refer to it by name.]
@@ -77,22 +77,18 @@ const chatWithContractsFlow = ai.defineFlow(
     outputSchema: ChatWithContractsOutputSchema,
   },
   async input => {
-    // Ensure data URIs are actually PDFs before passing to a model expecting PDF media
+    // Augment contract data with an isPdf flag for the template
     const processedInput = {
       ...input,
       contracts: input.contracts.map(contract => {
-        if (contract.contentDataUri.startsWith('data:application/pdf;base64,')) {
-          return contract;
-        }
-        // For non-PDFs, we might want to extract text or handle differently
-        // For now, we'll pass it as is, but the prompt template has a conditional
+        const isPdf = contract.contentDataUri.startsWith('data:application/pdf;base64,');
         return {
           ...contract,
-          // Potentially alter contentDataUri or add a text representation here
+          isPdf: isPdf, // Add the isPdf flag here
         };
       })
     };
-    const {output} = await prompt(processedInput);
+    const {output} = await prompt(processedInput); // Pass the augmented input to the prompt
     return output!;
   }
 );
