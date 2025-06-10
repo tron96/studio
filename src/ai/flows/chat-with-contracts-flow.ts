@@ -40,7 +40,7 @@ export async function chatWithContracts(input: ChatWithContractsInput): Promise<
 
 const prompt = ai.definePrompt({
   name: 'chatWithContractsPrompt',
-  model: 'huggingface/meta-llama/Llama-3.2-1B-Instruct', // Use the Llama model
+  model: 'meta-llama/Llama-3.2-1B-Instruct', // Use the Llama model
   input: {schema: ChatWithContractsInputSchema}, // The schema for the raw input to the flow
   output: {schema: ChatWithContractsOutputSchema},
   // Removed Gemini-specific safetySettings
