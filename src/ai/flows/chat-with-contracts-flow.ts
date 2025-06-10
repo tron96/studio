@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI flow for chatting about uploaded contract texts using @xenova/transformers.
@@ -25,7 +26,8 @@ export interface ChatWithContractsOutput {
 
 // Initialize the text generation pipeline once
 let generator: Pipeline | null = null;
-const modelName = 'Xenova/Llama-3.2-1B-Instruct';
+// const modelName = 'Xenova/Llama-3.2-1B-Instruct'; // This model likely doesn't exist or is incorrect
+const modelName = 'Xenova/TinyLlama-1.1B-Chat-v1.0'; // Using a known smaller Llama-like model
 
 async function getGenerator() {
   if (!generator) {
@@ -34,8 +36,9 @@ async function getGenerator() {
         // progress_callback: (progress: any) => console.log('Model loading progress:', progress),
       });
     } catch (error) {
-      console.error('Failed to load text generation model:', error);
-      throw new Error('Failed to load text generation model. Please check server logs.');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`Failed to load text generation model (${modelName}):`, errorMessage, error);
+      throw new Error(`Failed to load text generation model (${modelName}). Original error: ${errorMessage}. Please check server logs.`);
     }
   }
   return generator;
@@ -72,6 +75,7 @@ export async function chatWithContracts(
 
   const loadedGenerator = await getGenerator();
    if (!loadedGenerator) {
+    // This path should ideally not be reached if getGenerator throws an error.
     return { aiResponse: "Text generation model is not available." };
   }
 

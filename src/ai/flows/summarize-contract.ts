@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Summarizes contract text using @xenova/transformers.
@@ -19,7 +20,9 @@ export interface SummarizeContractOutput {
 
 // Initialize the summarization pipeline once
 let summarizer: Pipeline | null = null;
-const modelName = 'Xenova/Llama-3.2-1B-Instruct'; // Or a more specific summarization model if preferred
+// const modelName = 'Xenova/Llama-3.2-1B-Instruct'; // This model likely doesn't exist or is incorrect
+const modelName = 'Xenova/TinyLlama-1.1B-Chat-v1.0'; // Using a known smaller Llama-like model for consistency
+
 
 async function getSummarizer() {
   if (!summarizer) {
@@ -29,8 +32,9 @@ async function getSummarizer() {
         // progress_callback: (progress: any) => console.log('Model loading progress:', progress),
       });
     } catch (error) {
-      console.error('Failed to load summarization model:', error);
-      throw new Error('Failed to load summarization model. Please check server logs.');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`Failed to load summarization model (${modelName}):`, errorMessage, error);
+      throw new Error(`Failed to load summarization model (${modelName}). Original error: ${errorMessage}. Please check server logs.`);
     }
   }
   return summarizer;
@@ -45,8 +49,7 @@ export async function summarizeContract(
 
   const loadedSummarizer = await getSummarizer();
   if (!loadedSummarizer) {
-    // This case should ideally be handled by the error in getSummarizer,
-    // but as a fallback:
+    // This path should ideally not be reached if getSummarizer throws an error.
     return { summary: "Summarization model is not available." };
   }
 
