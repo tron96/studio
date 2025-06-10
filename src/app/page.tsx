@@ -7,7 +7,9 @@ import ContractUpload from '@/components/contract-insights/ContractUpload';
 import UploadedContractsList from '@/components/contract-insights/UploadedContractsList';
 import ChatInterface from '@/components/contract-insights/ChatInterface';
 import type { Message as ChatMessageType } from '@/components/contract-insights/ChatMessage';
-import { chatWithContracts, type ChatWithContractsInput, type Contract as AiContract } from '@/ai/flows/chat-with-contracts-flow';
+import { chatWithContracts, type ChatWithContractsInput, type Contract as AiContractText } from '@/ai/flows/chat-with-contracts-flow';
+// Note: summarizeContract is not currently used in this page, but types might be needed if re-integrated.
+// import { summarizeContract, type SummarizeContractInput } from '@/ai/flows/summarize-contract';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -15,7 +17,7 @@ import { Terminal } from "lucide-react";
 
 interface UploadedContract {
   file: File;
-  dataUri: string;
+  dataUri: string; // We keep dataUri for potential future use (e.g., PDF display)
   id: string;
 }
 
@@ -32,6 +34,8 @@ export default function ContractChatPage() {
 
   const generateId = () => Math.random().toString(36).substring(2, 15);
 
+  // This function remains, but its output (dataUri) will not be directly sent to the AI model.
+  // Instead, a placeholder text will be sent until PDF text extraction is implemented.
   const fileToDataUri = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -50,7 +54,7 @@ export default function ContractChatPage() {
     let fileErrorOccurred = false;
 
     for (const file of files) {
-      if (file.size > 20 * 1024 * 1024) { // 20MB limit per file for robustness
+      if (file.size > 20 * 1024 * 1024) { // 20MB limit
         setError(`File "${file.name}" exceeds 20MB. Please upload smaller PDFs.`);
         toast({
           title: "Upload Error",
@@ -72,6 +76,8 @@ export default function ContractChatPage() {
       }
 
       try {
+        // We still generate dataUri for potential display or other uses,
+        // but it's NOT what we'll send to the AI for text processing.
         const dataUri = await fileToDataUri(file);
         newUploadedContracts.push({ file, dataUri, id: generateId() });
       } catch (err) {
@@ -92,12 +98,12 @@ export default function ContractChatPage() {
     if (newUploadedContracts.length > 0 && !fileErrorOccurred) {
       toast({
         title: "Upload Successful",
-        description: `${newUploadedContracts.length} contract(s) uploaded and ready for chat.`,
+        description: `${newUploadedContracts.length} contract(s) uploaded. Ready for chat. (Note: PDF text extraction is a placeholder).`,
       });
     } else if (newUploadedContracts.length > 0 && fileErrorOccurred) {
        toast({
         title: "Partial Upload",
-        description: `${newUploadedContracts.length} contract(s) uploaded, but some files had issues.`,
+        description: `${newUploadedContracts.length} contract(s) uploaded, but some files had issues. (Note: PDF text extraction is a placeholder).`,
         variant: "default" 
       });
     }
@@ -125,9 +131,11 @@ export default function ContractChatPage() {
     setError(null);
 
     try {
-      const aiContracts: AiContract[] = uploadedContracts.map(uc => ({
+      const aiContracts: AiContractText[] = uploadedContracts.map(uc => ({
         fileName: uc.file.name,
-        contentDataUri: uc.dataUri,
+        // IMPORTANT PLACEHOLDER: Actual PDF text extraction needs to be implemented.
+        // For now, we send a placeholder string to the AI.
+        contentText: `[PDF content for ${uc.file.name}. Text extraction from PDF is not yet implemented. This is placeholder text.]`,
       }));
       
       const input: ChatWithContractsInput = {
@@ -135,7 +143,8 @@ export default function ContractChatPage() {
         contracts: aiContracts,
       };
       
-      const result = await chatWithContracts(input);
+      // Ensure you are calling the new Transformers.js based function
+      const result = await chatWithContracts(input); 
       
       const aiMessage: ChatMessageType = {
         id: generateId(),
@@ -182,7 +191,7 @@ export default function ContractChatPage() {
       <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 gap-4 items-center">
         {uploadedContracts.length === 0 ? (
           <div className="w-full max-w-2xl flex flex-col items-center justify-center pt-10">
-            {error && !isLoadingUpload && ( // Show upload-specific errors here
+            {error && !isLoadingUpload && ( 
               <Alert variant="destructive" className="mb-4 w-full">
                 <Terminal className="h-4 w-4" />
                 <AlertTitle>Upload Error</AlertTitle>
@@ -192,9 +201,9 @@ export default function ContractChatPage() {
             <ContractUpload onFilesUpload={handleFilesUpload} isLoading={isLoadingUpload} />
           </div>
         ) : (
-          <div className="w-full h-[calc(100vh-10rem)] flex flex-col gap-4 max-w-4xl mx-auto"> {/* Max width for chat view */}
+          <div className="w-full h-[calc(100vh-10rem)] flex flex-col gap-4 max-w-4xl mx-auto">
             <UploadedContractsList contracts={uploadedContracts} />
-             {error && !isLoadingChatResponse && ( // Show chat-specific errors here
+             {error && !isLoadingChatResponse && ( 
               <Alert variant="destructive" className="w-full">
                 <Terminal className="h-4 w-4" />
                 <AlertTitle>Chat Error</AlertTitle>
@@ -207,7 +216,7 @@ export default function ContractChatPage() {
               onInputChange={setCurrentChatInput}
               onSendMessage={handleSendMessage}
               isLoading={isLoadingChatResponse}
-              chatContainerHeight="flex-1 min-h-0" // Ensure ScrollArea has boundaries
+              chatContainerHeight="flex-1 min-h-0"
             />
           </div>
         )}
