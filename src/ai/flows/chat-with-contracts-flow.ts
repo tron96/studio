@@ -40,17 +40,10 @@ export async function chatWithContracts(input: ChatWithContractsInput): Promise<
 
 const prompt = ai.definePrompt({
   name: 'chatWithContractsPrompt',
-  model: 'googleai/gemini-2.0-flash', // Explicitly define model or rely on default from genkit.ts
+  model: 'huggingface/meta-llama/Llama-3.2-1B-Instruct', // Use the Llama model
   input: {schema: ChatWithContractsInputSchema},
   output: {schema: ChatWithContractsOutputSchema},
-  config: { // Safety settings are applied here
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }, // Contracts might discuss sensitive but not dangerous topics
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' }, // Contracts are unlikely to be explicit
-    ]
-  },
+  // Removed Gemini-specific safetySettings
   prompt: `You are a helpful AI assistant specializing in contract analysis.
 You have been provided with the following contract(s). Your task is to answer the user's question based *only* on the information contained within these documents.
 If the information is not found in the contracts, state that explicitly. Do not make assumptions or use external knowledge.
@@ -60,7 +53,11 @@ Here are the contracts:
 {{#each contracts}}
 Contract Filename: {{this.fileName}}
 Contract Content (this is a PDF document, interpret its content):
+{{#if (eq (substring (substring contentDataUri 5) 0 (indexOf (substring contentDataUri 5) ';')) 'application/pdf')}}
 {{media url=this.contentDataUri}}
+{{else}}
+[Content of {{this.fileName}} is not a PDF and cannot be directly displayed in this prompt for PDF-focused models. Refer to it by name.]
+{{/if}}
 ---
 {{/each}}
 {{else}}
@@ -80,7 +77,22 @@ const chatWithContractsFlow = ai.defineFlow(
     outputSchema: ChatWithContractsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    // Ensure data URIs are actually PDFs before passing to a model expecting PDF media
+    const processedInput = {
+      ...input,
+      contracts: input.contracts.map(contract => {
+        if (contract.contentDataUri.startsWith('data:application/pdf;base64,')) {
+          return contract;
+        }
+        // For non-PDFs, we might want to extract text or handle differently
+        // For now, we'll pass it as is, but the prompt template has a conditional
+        return {
+          ...contract,
+          // Potentially alter contentDataUri or add a text representation here
+        };
+      })
+    };
+    const {output} = await prompt(processedInput);
     return output!;
   }
 );

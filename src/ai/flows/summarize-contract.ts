@@ -31,6 +31,7 @@ export async function summarizeContract(input: SummarizeContractInput): Promise<
 
 const prompt = ai.definePrompt({
   name: 'summarizeContractPrompt',
+  model: 'huggingface/meta-llama/Llama-3.2-1B-Instruct', // Use the Llama model
   input: {schema: SummarizeContractInputSchema},
   output: {schema: SummarizeContractOutputSchema},
   prompt: `You are an expert legal contract summarizer.
