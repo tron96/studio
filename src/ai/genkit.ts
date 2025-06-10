@@ -1,5 +1,4 @@
 
-'use server';
 import { genkit } from 'genkit'; // Import the 'genkit' function for initialization
 import { googleAI } from '@genkit-ai/googleai';
 import nextPlugin from '@genkit-ai/next'; // Default import should be correct
