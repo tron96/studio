@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ChangeEvent, FC } from 'react';
@@ -7,16 +8,18 @@ import { Input } from '@/components/ui/input';
 import { UploadCloud } from 'lucide-react';
 
 interface ContractUploadProps {
-  onFileUpload: (file: File) => void;
+  onFilesUpload: (files: File[]) => void;
   isLoading: boolean;
 }
 
-const ContractUpload: FC<ContractUploadProps> = ({ onFileUpload, isLoading }) => {
+const ContractUpload: FC<ContractUploadProps> = ({ onFilesUpload, isLoading }) => {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      onFileUpload(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      onFilesUpload(Array.from(files));
     }
+    // Reset the input value to allow uploading the same file(s) again if removed and re-selected
+    event.target.value = '';
   };
 
   return (
@@ -24,10 +27,10 @@ const ContractUpload: FC<ContractUploadProps> = ({ onFileUpload, isLoading }) =>
       <CardHeader>
         <CardTitle className="font-headline text-xl flex items-center">
           <UploadCloud className="mr-2 h-6 w-6 text-primary" />
-          Upload Contract
+          Upload Contracts
         </CardTitle>
         <CardDescription>
-          Select a PDF contract document to analyze and summarize its key terms.
+          Select one or more PDF contract documents to analyze.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -36,17 +39,18 @@ const ContractUpload: FC<ContractUploadProps> = ({ onFileUpload, isLoading }) =>
             id="pdf-upload"
             type="file"
             accept=".pdf"
+            multiple // Allow multiple file selection
             onChange={handleFileChange}
             disabled={isLoading}
             className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
           />
-          <Button 
-            onClick={() => document.getElementById('pdf-upload')?.click()} 
-            className="w-full" 
+           <Button
+            onClick={() => document.getElementById('pdf-upload')?.click()}
+            className="w-full"
             disabled={isLoading}
             variant="outline"
           >
-            {isLoading ? 'Processing...' : 'Choose PDF File'}
+            {isLoading ? 'Processing...' : 'Choose PDF File(s)'}
           </Button>
         </div>
       </CardContent>
