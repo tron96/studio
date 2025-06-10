@@ -9,30 +9,16 @@
  * - Contract - The type for an individual contract.
  */
 
-import { ai } from '@/ai/genkit'; // Import the configured AI instance
-import { z } from 'genkit'; 
+import { ai } from '@/ai/genkit'; 
+import type { z } from 'genkit'; // Import z type for inference
+import { 
+  ContractSchema, 
+  ChatWithContractsInputSchema, 
+  ChatWithContractsOutputSchema 
+} from '../schemas'; // Import schemas
 
-// Define Zod schema for individual contract details (not exported)
-const ContractSchema = z.object({
-  fileName: z.string().describe('The name of the contract file.'),
-  contentDataUri: z.string().describe(
-    "The contract content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-  ),
-  isPdf: z.boolean().optional().describe('Indicates if the contract is a PDF (for prompt logic).')
-});
 export type Contract = z.infer<typeof ContractSchema>;
-
-// Define Zod schema for input (not exported)
-const ChatWithContractsInputSchema = z.object({
-  userQuery: z.string().describe("The user's question about the contracts."),
-  contracts: z.array(ContractSchema).describe('An array of contracts to chat about.'),
-});
 export type ChatWithContractsInput = z.infer<typeof ChatWithContractsInputSchema>;
-
-// Define Zod schema for output (not exported)
-const ChatWithContractsOutputSchema = z.object({
-  aiResponse: z.string().describe('The AI-generated response to the user query.'),
-});
 export type ChatWithContractsOutput = z.infer<typeof ChatWithContractsOutputSchema>;
 
 // Helper function to preprocess input for the prompt
@@ -47,7 +33,7 @@ function preparePromptInput(input: ChatWithContractsInput): ChatWithContractsInp
 export async function chatWithContracts(
   input: ChatWithContractsInput
 ): Promise<ChatWithContractsOutput> {
-  const processedInput = preparePromptInput(input); // Preprocess input before calling the flow
+  const processedInput = preparePromptInput(input);
   return chatWithContractsFlow(processedInput);
 }
 
@@ -95,8 +81,8 @@ const chatWithContractsFlow = ai.defineFlow(
     inputSchema: ChatWithContractsInputSchema, 
     outputSchema: ChatWithContractsOutputSchema,
   },
-  async (input) => { 
-    const { output } = await chatPrompt(input); // Pass the augmented input to the prompt
+  async (input: ChatWithContractsInput) => { 
+    const { output } = await chatPrompt(input); 
     if (!output) {
       throw new Error('Failed to generate chat response, output was null.');
     }

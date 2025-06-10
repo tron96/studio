@@ -8,21 +8,14 @@
  * - SummarizeContractOutput - The return type for the summarizeContract function.
  */
 
-import { ai } from '@/ai/genkit'; // Import the configured AI instance
-import { z } from 'genkit'; 
+import { ai } from '@/ai/genkit'; 
+import type { z } from 'genkit'; // Import z type for inference
+import { 
+  SummarizeContractInputSchema, 
+  SummarizeContractOutputSchema 
+} from '../schemas'; // Import schemas
 
-// Define Zod schema for input (not exported)
-const SummarizeContractInputSchema = z.object({
-  contractDataUri: z.string().describe(
-    "The contract content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-  ),
-});
 export type SummarizeContractInput = z.infer<typeof SummarizeContractInputSchema>;
-
-// Define Zod schema for output (not exported)
-const SummarizeContractOutputSchema = z.object({
-  summary: z.string().describe('The AI-generated summary of the contract.'),
-});
 export type SummarizeContractOutput = z.infer<typeof SummarizeContractOutputSchema>;
 
 export async function summarizeContract(
@@ -33,7 +26,7 @@ export async function summarizeContract(
 
 const summarizePrompt = ai.definePrompt({
   name: 'summarizeContractPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Specify Gemini model
+  model: 'googleai/gemini-1.5-flash-latest',
   input: { schema: SummarizeContractInputSchema },
   output: { schema: SummarizeContractOutputSchema },
   prompt: `You are an expert legal contract summarizer.
@@ -51,7 +44,7 @@ const summarizeContractFlow = ai.defineFlow(
     inputSchema: SummarizeContractInputSchema,
     outputSchema: SummarizeContractOutputSchema,
   },
-  async (input) => {
+  async (input: SummarizeContractInput) => {
     const { output } = await summarizePrompt(input);
     if (!output) {
       throw new Error('Failed to generate summary, output was null.');
