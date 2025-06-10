@@ -1,20 +1,19 @@
+
 'use server';
 /**
  * @fileOverview AI flow for chatting about uploaded contract texts using Genkit and Gemini.
  *
  * - chatWithContracts - A function to handle chat queries about contracts.
- * - ChatWithContractsInputSchema - Zod schema for input.
- * - ChatWithContractsOutputSchema - Zod schema for output.
- * - ContractSchema - Zod schema for individual contract details.
  * - ChatWithContractsInput - The input type.
  * - ChatWithContractsOutput - The output type.
  * - Contract - The type for an individual contract.
  */
 
 import { ai } from '@/ai/genkit'; // Import the configured AI instance
-import { z } from 'genkit/zod';
+import { z } from 'genkit'; 
 
-export const ContractSchema = z.object({
+// Define Zod schema for individual contract details (not exported)
+const ContractSchema = z.object({
   fileName: z.string().describe('The name of the contract file.'),
   contentDataUri: z.string().describe(
     "The contract content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
@@ -23,18 +22,20 @@ export const ContractSchema = z.object({
 });
 export type Contract = z.infer<typeof ContractSchema>;
 
-export const ChatWithContractsInputSchema = z.object({
+// Define Zod schema for input (not exported)
+const ChatWithContractsInputSchema = z.object({
   userQuery: z.string().describe("The user's question about the contracts."),
   contracts: z.array(ContractSchema).describe('An array of contracts to chat about.'),
 });
 export type ChatWithContractsInput = z.infer<typeof ChatWithContractsInputSchema>;
 
-export const ChatWithContractsOutputSchema = z.object({
+// Define Zod schema for output (not exported)
+const ChatWithContractsOutputSchema = z.object({
   aiResponse: z.string().describe('The AI-generated response to the user query.'),
 });
 export type ChatWithContractsOutput = z.infer<typeof ChatWithContractsOutputSchema>;
 
-// Helper function to preprocess input for the prompt, e.g., determine if content is PDF
+// Helper function to preprocess input for the prompt
 function preparePromptInput(input: ChatWithContractsInput): ChatWithContractsInput {
     const processedContracts = input.contracts.map(contract => ({
         ...contract,
@@ -52,8 +53,8 @@ export async function chatWithContracts(
 
 const chatPrompt = ai.definePrompt({
   name: 'chatWithContractsPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Explicitly Gemini
-  input: { schema: ChatWithContractsInputSchema }, // Schema for the (processed) input to the prompt
+  model: 'googleai/gemini-1.5-flash-latest', 
+  input: { schema: ChatWithContractsInputSchema }, 
   output: { schema: ChatWithContractsOutputSchema },
   prompt: `You are a helpful AI assistant specializing in contract analysis.
 You have been provided with the following contract(s). Your task is to answer the user's question based *only* on the information contained within these documents.
@@ -67,7 +68,7 @@ Contract Content:
 {{#if this.isPdf}}
 {{media url=this.contentDataUri}}
 {{else}}
-[Non-PDF content for {{this.fileName}}. Ensure textual representation is provided if this is not an image/PDF.]
+[Content for {{this.fileName}}. This is not a PDF. Display content as plain text if available.]
 {{/if}}
 ---
 {{/each}}
@@ -91,11 +92,11 @@ AI Response:`,
 const chatWithContractsFlow = ai.defineFlow(
   {
     name: 'chatWithContractsFlow',
-    inputSchema: ChatWithContractsInputSchema, // Flow expects the processed input structure
+    inputSchema: ChatWithContractsInputSchema, 
     outputSchema: ChatWithContractsOutputSchema,
   },
-  async (input) => { // This input is already processed by the wrapper function
-    const { output } = await chatPrompt(input);
+  async (input) => { 
+    const { output } = await chatPrompt(input); // Pass the augmented input to the prompt
     if (!output) {
       throw new Error('Failed to generate chat response, output was null.');
     }

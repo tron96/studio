@@ -1,25 +1,26 @@
+
 'use server';
 /**
  * @fileOverview Summarizes contract text using Genkit and Gemini.
  *
  * - summarizeContract - A function that handles the contract summarization process.
- * - SummarizeContractInputSchema - The Zod schema for the input.
- * - SummarizeContractOutputSchema - The Zod schema for the output.
  * - SummarizeContractInput - The input type for the summarizeContract function.
  * - SummarizeContractOutput - The return type for the summarizeContract function.
  */
 
 import { ai } from '@/ai/genkit'; // Import the configured AI instance
-import { z } from 'genkit/zod';
+import { z } from 'genkit'; 
 
-export const SummarizeContractInputSchema = z.object({
+// Define Zod schema for input (not exported)
+const SummarizeContractInputSchema = z.object({
   contractDataUri: z.string().describe(
     "The contract content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
   ),
 });
 export type SummarizeContractInput = z.infer<typeof SummarizeContractInputSchema>;
 
-export const SummarizeContractOutputSchema = z.object({
+// Define Zod schema for output (not exported)
+const SummarizeContractOutputSchema = z.object({
   summary: z.string().describe('The AI-generated summary of the contract.'),
 });
 export type SummarizeContractOutput = z.infer<typeof SummarizeContractOutputSchema>;
