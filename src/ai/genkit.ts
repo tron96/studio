@@ -1,6 +1,6 @@
 
 import {genkit} from 'genkit';
-import * as hf from 'genkitx-huggingface'; // Changed import
+import hf from 'genkitx-huggingface'; // Changed import
 import { config } from 'dotenv';
 
 config(); // Ensure environment variables are loaded
@@ -27,3 +27,4 @@ export const ai = genkit({
     }
   }
 });
+
