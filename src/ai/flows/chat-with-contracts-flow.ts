@@ -40,8 +40,17 @@ export async function chatWithContracts(input: ChatWithContractsInput): Promise<
 
 const prompt = ai.definePrompt({
   name: 'chatWithContractsPrompt',
+  model: 'googleai/gemini-2.0-flash', // Explicitly define model or rely on default from genkit.ts
   input: {schema: ChatWithContractsInputSchema},
   output: {schema: ChatWithContractsOutputSchema},
+  config: { // Safety settings are applied here
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }, // Contracts might discuss sensitive but not dangerous topics
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' }, // Contracts are unlikely to be explicit
+    ]
+  },
   prompt: `You are a helpful AI assistant specializing in contract analysis.
 You have been provided with the following contract(s). Your task is to answer the user's question based *only* on the information contained within these documents.
 If the information is not found in the contracts, state that explicitly. Do not make assumptions or use external knowledge.
@@ -71,18 +80,7 @@ const chatWithContractsFlow = ai.defineFlow(
     outputSchema: ChatWithContractsOutputSchema,
   },
   async input => {
-    // Configure safety settings to be less restrictive for realistic contract data
-    // This is an example; adjust thresholds based on specific needs and testing
-    const {output} = await prompt(input, {
-        model: ai.getModel('googleai/gemini-2.0-flash', { // Ensure you have a specific model alias if using one in ai.ts or use the full model name
-            safetySettings: [
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }, // Contracts might discuss sensitive but not dangerous topics
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' }, // Contracts are unlikely to be explicit
-            ]
-        })
-    });
+    const {output} = await prompt(input);
     return output!;
   }
 );
