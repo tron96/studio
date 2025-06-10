@@ -1,100 +1,60 @@
-
 'use server';
 /**
- * @fileOverview Summarizes contract text using @xenova/transformers.
+ * @fileOverview Summarizes contract text using Genkit and Gemini.
  *
  * - summarizeContract - A function that handles the contract summarization process.
+ * - SummarizeContractInputSchema - The Zod schema for the input.
+ * - SummarizeContractOutputSchema - The Zod schema for the output.
  * - SummarizeContractInput - The input type for the summarizeContract function.
  * - SummarizeContractOutput - The return type for the summarizeContract function.
  */
 
-import { pipeline, type Pipeline } from '@xenova/transformers';
+import { ai } from '@/ai/genkit'; // Import the configured AI instance
+import { z } from 'genkit/zod';
 
-export interface SummarizeContractInput {
-  contractText: string;
-}
+export const SummarizeContractInputSchema = z.object({
+  contractDataUri: z.string().describe(
+    "The contract content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+  ),
+});
+export type SummarizeContractInput = z.infer<typeof SummarizeContractInputSchema>;
 
-export interface SummarizeContractOutput {
-  summary: string;
-}
-
-// Initialize the summarization pipeline once
-let summarizer: Pipeline | null = null;
-// const modelName = 'Xenova/Llama-3.2-1B-Instruct'; // This model likely doesn't exist or is incorrect
-const modelName = 'Xenova/TinyLlama-1.1B-Chat-v1.0'; // Using a known smaller Llama-like model for consistency
-
-
-async function getSummarizer() {
-  if (!summarizer) {
-    try {
-      summarizer = await pipeline('text-generation', modelName, {
-        // For some models, progress_callback can be useful in server environments
-        // progress_callback: (progress: any) => console.log('Model loading progress:', progress),
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to load summarization model (${modelName}):`, errorMessage, error);
-      throw new Error(`Failed to load summarization model (${modelName}). Original error: ${errorMessage}. Please check server logs.`);
-    }
-  }
-  return summarizer;
-}
+export const SummarizeContractOutputSchema = z.object({
+  summary: z.string().describe('The AI-generated summary of the contract.'),
+});
+export type SummarizeContractOutput = z.infer<typeof SummarizeContractOutputSchema>;
 
 export async function summarizeContract(
   input: SummarizeContractInput
 ): Promise<SummarizeContractOutput> {
-  if (!input.contractText || input.contractText.trim() === "") {
-    return { summary: "No contract text provided to summarize." };
-  }
-
-  const loadedSummarizer = await getSummarizer();
-  if (!loadedSummarizer) {
-    // This path should ideally not be reached if getSummarizer throws an error.
-    return { summary: "Summarization model is not available." };
-  }
-
-  const prompt = `You are an expert legal contract summarizer.
-Please provide a concise summary of the key terms of the following contract text, including but not limited to: pricing, delivery terms, duration, and the parties involved.
-
-Contract Text:
-${input.contractText}
-
-Summary:`;
-
-  try {
-    const outputs = await loadedSummarizer(prompt, {
-      max_new_tokens: 250, // Adjust as needed for summary length
-      temperature: 0.2,    // Lower temperature for more focused summaries
-      repetition_penalty: 1.1,
-      // num_beams: 3, // Can improve quality but slower
-      // early_stopping: true, // Stop when EOS token is generated
-    });
-    
-    let generatedSummary = "";
-    if (Array.isArray(outputs) && outputs.length > 0 && outputs[0].generated_text) {
-      // The model might return the prompt + summary, so we try to extract just the summary part
-      const fullText = outputs[0].generated_text;
-      const summaryMarker = "Summary:";
-      const summaryStartIndex = fullText.lastIndexOf(summaryMarker);
-      if (summaryStartIndex !== -1) {
-        generatedSummary = fullText.substring(summaryStartIndex + summaryMarker.length).trim();
-      } else {
-        // Fallback if the marker isn't found (e.g. model didn't follow prompt structure exactly)
-        // This might need refinement based on actual model output.
-        // For now, assume the last part after the prompt is the summary.
-        generatedSummary = fullText.replace(prompt.replace('Summary:','').trim(), '').trim();
-
-      }
-    } else {
-      console.warn("No valid summary generated, or unexpected output format:", outputs);
-      generatedSummary = "Could not generate a summary from the provided text.";
-    }
-
-    return { summary: generatedSummary || "Summary could not be generated." };
-  } catch (error) {
-    console.error('Error during contract summarization:', error);
-    // Check if the error is an object and has a message property
-    const errorMessage = (error instanceof Error) ? error.message : String(error);
-    return { summary: `Failed to summarize contract: ${errorMessage}` };
-  }
+  return summarizeContractFlow(input);
 }
+
+const summarizePrompt = ai.definePrompt({
+  name: 'summarizeContractPrompt',
+  model: 'googleai/gemini-1.5-flash-latest', // Specify Gemini model
+  input: { schema: SummarizeContractInputSchema },
+  output: { schema: SummarizeContractOutputSchema },
+  prompt: `You are an expert legal contract summarizer.
+Please provide a concise summary of the key terms of the following contract, including but not limited to: pricing, delivery terms, duration, and the parties involved.
+
+Contract Content:
+{{media url=contractDataUri}}
+
+Summary:`,
+});
+
+const summarizeContractFlow = ai.defineFlow(
+  {
+    name: 'summarizeContractFlow',
+    inputSchema: SummarizeContractInputSchema,
+    outputSchema: SummarizeContractOutputSchema,
+  },
+  async (input) => {
+    const { output } = await summarizePrompt(input);
+    if (!output) {
+      throw new Error('Failed to generate summary, output was null.');
+    }
+    return output;
+  }
+);

@@ -7,8 +7,9 @@ import ContractUpload from '@/components/contract-insights/ContractUpload';
 import UploadedContractsList from '@/components/contract-insights/UploadedContractsList';
 import ChatInterface from '@/components/contract-insights/ChatInterface';
 import type { Message as ChatMessageType } from '@/components/contract-insights/ChatMessage';
-import { chatWithContracts, type ChatWithContractsInput, type Contract as AiContractText } from '@/ai/flows/chat-with-contracts-flow';
-// Note: summarizeContract is not currently used in this page, but types might be needed if re-integrated.
+// Updated imports for Genkit flow and types
+import { chatWithContracts, type ChatWithContractsInput, type Contract as AiContract } from '@/ai/flows/chat-with-contracts-flow';
+// summarizeContract import would also need to be updated if used
 // import { summarizeContract, type SummarizeContractInput } from '@/ai/flows/summarize-contract';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,7 +18,7 @@ import { Terminal } from "lucide-react";
 
 interface UploadedContract {
   file: File;
-  dataUri: string; // We keep dataUri for potential future use (e.g., PDF display)
+  dataUri: string; 
   id: string;
 }
 
@@ -34,8 +35,6 @@ export default function ContractChatPage() {
 
   const generateId = () => Math.random().toString(36).substring(2, 15);
 
-  // This function remains, but its output (dataUri) will not be directly sent to the AI model.
-  // Instead, a placeholder text will be sent until PDF text extraction is implemented.
   const fileToDataUri = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -65,10 +64,13 @@ export default function ContractChatPage() {
         continue; 
       }
       if (file.type !== "application/pdf") {
-        setError(`File "${file.name}" is not a PDF. Please upload PDF files only.`);
+        // Allow other types if Gemini can handle them, or add specific checks.
+        // For now, keeping PDF check as it's common for contracts.
+        // You might want to relax this if sending various document types.
+        setError(`File "${file.name}" is not a PDF. Please upload PDF files only for best results with {{media}} helper.`);
         toast({
           title: "Upload Error",
-          description: `File "${file.name}" is not a PDF.`,
+          description: `File "${file.name}" is not a PDF. Consider uploading PDFs.`,
           variant: "destructive",
         });
         fileErrorOccurred = true;
@@ -76,8 +78,6 @@ export default function ContractChatPage() {
       }
 
       try {
-        // We still generate dataUri for potential display or other uses,
-        // but it's NOT what we'll send to the AI for text processing.
         const dataUri = await fileToDataUri(file);
         newUploadedContracts.push({ file, dataUri, id: generateId() });
       } catch (err) {
@@ -98,12 +98,12 @@ export default function ContractChatPage() {
     if (newUploadedContracts.length > 0 && !fileErrorOccurred) {
       toast({
         title: "Upload Successful",
-        description: `${newUploadedContracts.length} contract(s) uploaded. Ready for chat. (Note: PDF text extraction is a placeholder).`,
+        description: `${newUploadedContracts.length} contract(s) uploaded. Ready for chat.`,
       });
     } else if (newUploadedContracts.length > 0 && fileErrorOccurred) {
        toast({
         title: "Partial Upload",
-        description: `${newUploadedContracts.length} contract(s) uploaded, but some files had issues. (Note: PDF text extraction is a placeholder).`,
+        description: `${newUploadedContracts.length} contract(s) uploaded, but some files had issues.`,
         variant: "default" 
       });
     }
@@ -131,11 +131,11 @@ export default function ContractChatPage() {
     setError(null);
 
     try {
-      const aiContracts: AiContractText[] = uploadedContracts.map(uc => ({
+      // Prepare contracts for Genkit flow, using contentDataUri
+      const aiContracts: AiContract[] = uploadedContracts.map(uc => ({
         fileName: uc.file.name,
-        // IMPORTANT PLACEHOLDER: Actual PDF text extraction needs to be implemented.
-        // For now, we send a placeholder string to the AI.
-        contentText: `[PDF content for ${uc.file.name}. Text extraction from PDF is not yet implemented. This is placeholder text.]`,
+        contentDataUri: uc.dataUri, // Pass the data URI to Genkit
+        // isPdf will be determined by the flow's preparePromptInput if needed by the prompt logic
       }));
       
       const input: ChatWithContractsInput = {
@@ -143,7 +143,6 @@ export default function ContractChatPage() {
         contracts: aiContracts,
       };
       
-      // Ensure you are calling the new Transformers.js based function
       const result = await chatWithContracts(input); 
       
       const aiMessage: ChatMessageType = {

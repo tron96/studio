@@ -1,116 +1,104 @@
-
 'use server';
 /**
- * @fileOverview AI flow for chatting about uploaded contract texts using @xenova/transformers.
+ * @fileOverview AI flow for chatting about uploaded contract texts using Genkit and Gemini.
  *
  * - chatWithContracts - A function to handle chat queries about contracts.
- * - ChatWithContractsInput - The input type for the chatWithContracts function.
- * - ChatWithContractsOutput - The return type for the chatWithContracts function.
+ * - ChatWithContractsInputSchema - Zod schema for input.
+ * - ChatWithContractsOutputSchema - Zod schema for output.
+ * - ContractSchema - Zod schema for individual contract details.
+ * - ChatWithContractsInput - The input type.
+ * - ChatWithContractsOutput - The output type.
+ * - Contract - The type for an individual contract.
  */
 
-import { pipeline, type Pipeline } from '@xenova/transformers';
+import { ai } from '@/ai/genkit'; // Import the configured AI instance
+import { z } from 'genkit/zod';
 
-export interface Contract {
-  fileName: string;
-  contentText: string; // Changed from contentDataUri
-}
+export const ContractSchema = z.object({
+  fileName: z.string().describe('The name of the contract file.'),
+  contentDataUri: z.string().describe(
+    "The contract content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+  ),
+  isPdf: z.boolean().optional().describe('Indicates if the contract is a PDF (for prompt logic).')
+});
+export type Contract = z.infer<typeof ContractSchema>;
 
-export interface ChatWithContractsInput {
-  userQuery: string;
-  contracts: Contract[];
-}
+export const ChatWithContractsInputSchema = z.object({
+  userQuery: z.string().describe("The user's question about the contracts."),
+  contracts: z.array(ContractSchema).describe('An array of contracts to chat about.'),
+});
+export type ChatWithContractsInput = z.infer<typeof ChatWithContractsInputSchema>;
 
-export interface ChatWithContractsOutput {
-  aiResponse: string;
-}
+export const ChatWithContractsOutputSchema = z.object({
+  aiResponse: z.string().describe('The AI-generated response to the user query.'),
+});
+export type ChatWithContractsOutput = z.infer<typeof ChatWithContractsOutputSchema>;
 
-// Initialize the text generation pipeline once
-let generator: Pipeline | null = null;
-// const modelName = 'Xenova/Llama-3.2-1B-Instruct'; // This model likely doesn't exist or is incorrect
-const modelName = 'Xenova/TinyLlama-1.1B-Chat-v1.0'; // Using a known smaller Llama-like model
-
-async function getGenerator() {
-  if (!generator) {
-     try {
-      generator = await pipeline('text-generation', modelName, {
-        // progress_callback: (progress: any) => console.log('Model loading progress:', progress),
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to load text generation model (${modelName}):`, errorMessage, error);
-      throw new Error(`Failed to load text generation model (${modelName}). Original error: ${errorMessage}. Please check server logs.`);
-    }
-  }
-  return generator;
-}
-
-function buildPrompt(input: ChatWithContractsInput): string {
-  let contractInfo = "";
-  if (input.contracts.length > 0) {
-    contractInfo = "Here are the contracts:\n";
-    input.contracts.forEach(contract => {
-      contractInfo += `Contract Filename: ${contract.fileName}\n`;
-      contractInfo += `Contract Content:\n${contract.contentText}\n---\n`;
-    });
-  } else {
-    contractInfo = "No contracts have been provided. You can inform the user to upload contracts if their question implies they expect you to have some.\n";
-  }
-
-  return `You are a helpful AI assistant specializing in contract analysis.
-You have been provided with the following contract(s). Your task is to answer the user's question based *only* on the information contained within these documents.
-If the information is not found in the contracts, state that explicitly. Do not make assumptions or use external knowledge.
-
-${contractInfo}
-User's Question: ${input.userQuery}
-
-AI Response:`;
+// Helper function to preprocess input for the prompt, e.g., determine if content is PDF
+function preparePromptInput(input: ChatWithContractsInput): ChatWithContractsInput {
+    const processedContracts = input.contracts.map(contract => ({
+        ...contract,
+        isPdf: contract.contentDataUri.startsWith('data:application/pdf'),
+    }));
+    return { ...input, contracts: processedContracts };
 }
 
 export async function chatWithContracts(
   input: ChatWithContractsInput
 ): Promise<ChatWithContractsOutput> {
-  if (!input.userQuery || input.userQuery.trim() === "") {
-    return { aiResponse: "No user query provided." };
-  }
-
-  const loadedGenerator = await getGenerator();
-   if (!loadedGenerator) {
-    // This path should ideally not be reached if getGenerator throws an error.
-    return { aiResponse: "Text generation model is not available." };
-  }
-
-  const prompt = buildPrompt(input);
-
-  try {
-    const outputs = await loadedGenerator(prompt, {
-      max_new_tokens: 300, // Adjust as needed
-      temperature: 0.7,
-      repetition_penalty: 1.1,
-      // num_beams: 3,
-      // early_stopping: true,
-    });
-
-    let aiResponseText = "";
-    if (Array.isArray(outputs) && outputs.length > 0 && outputs[0].generated_text) {
-      // The model might return the prompt + response, so we try to extract just the response part
-      const fullText = outputs[0].generated_text;
-      const responseMarker = "AI Response:";
-      const responseStartIndex = fullText.lastIndexOf(responseMarker);
-      if (responseStartIndex !== -1) {
-        aiResponseText = fullText.substring(responseStartIndex + responseMarker.length).trim();
-      } else {
-         // Fallback if the marker isn't found
-        aiResponseText = fullText.replace(prompt.replace('AI Response:','').trim(), '').trim();
-      }
-    } else {
-      console.warn("No valid AI response generated, or unexpected output format:", outputs);
-      aiResponseText = "Could not generate a response to your query.";
-    }
-    
-    return { aiResponse: aiResponseText || "No response generated." };
-  } catch (error) {
-    console.error('Error during chat with contracts:', error);
-    const errorMessage = (error instanceof Error) ? error.message : String(error);
-    return { aiResponse: `Failed to process chat: ${errorMessage}` };
-  }
+  const processedInput = preparePromptInput(input); // Preprocess input before calling the flow
+  return chatWithContractsFlow(processedInput);
 }
+
+const chatPrompt = ai.definePrompt({
+  name: 'chatWithContractsPrompt',
+  model: 'googleai/gemini-1.5-flash-latest', // Explicitly Gemini
+  input: { schema: ChatWithContractsInputSchema }, // Schema for the (processed) input to the prompt
+  output: { schema: ChatWithContractsOutputSchema },
+  prompt: `You are a helpful AI assistant specializing in contract analysis.
+You have been provided with the following contract(s). Your task is to answer the user's question based *only* on the information contained within these documents.
+If the information is not found in the contracts, state that explicitly. Do not make assumptions or use external knowledge.
+
+{{#if contracts.length}}
+Here are the contracts:
+{{#each contracts}}
+Contract Filename: {{this.fileName}}
+Contract Content:
+{{#if this.isPdf}}
+{{media url=this.contentDataUri}}
+{{else}}
+[Non-PDF content for {{this.fileName}}. Ensure textual representation is provided if this is not an image/PDF.]
+{{/if}}
+---
+{{/each}}
+{{else}}
+No contracts have been provided. You can inform the user to upload contracts if their question implies they expect you to have some.
+{{/if}}
+
+User's Question: {{userQuery}}
+
+AI Response:`,
+  config: {
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_LOW_AND_ABOVE' },
+    ],
+  },
+});
+
+const chatWithContractsFlow = ai.defineFlow(
+  {
+    name: 'chatWithContractsFlow',
+    inputSchema: ChatWithContractsInputSchema, // Flow expects the processed input structure
+    outputSchema: ChatWithContractsOutputSchema,
+  },
+  async (input) => { // This input is already processed by the wrapper function
+    const { output } = await chatPrompt(input);
+    if (!output) {
+      throw new Error('Failed to generate chat response, output was null.');
+    }
+    return output;
+  }
+);
